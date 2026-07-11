@@ -1,0 +1,13 @@
+# Test videos for the chat-with-video feature.
+# Format: <source_id>|<title>
+# All from: https://www.youtube.com/playlist?list=PLKdU0fuY4OFfWY36nDJDlI26jXwInSm8f
+
+X1WED5kzfS8|What is Machine Learning? Artificial Intelligence Vs. Machine Learning (Explained)
+q1yVZ5SewKc|Types of Machine Learning Models | Discriminative Vs. Generative Model in AI
+RZ0q-1Co2LU|Regression Analysis in Statistics: Simple Linear Regression in Data Science & Machine Learning
+QSEpHXhLwcQ|Decision Tree: A Complete Guide for Machine Learning | Decision Tree with Python
+# R87peCcAWj8 hit an IP ban; backup candidates:
+# R87peCcAWj8|Overfitting and Underfitting Concepts in Machine Learning
+# SI93jx8_NQ4|What is Cross Validation | K-Fold & Stratified K-Fold Cross Validation
+# R3CwpuENdr8|XGBoost: Implementing K-Fold Cross Validation with Python & XGBoost Classifier
+# 3KsLqNzokUY|Random Forest: A Complete Guide for Machine Learning

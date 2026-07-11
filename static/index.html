@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chat with the Video — Phon-style LMS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --bg-2: #0f1420;
+    --bg-3: #141a26;
+    --border: #1f2937;
+    --text: #e5e7eb;
+    --text-dim: #9ca3af;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-soft: rgba(37, 99, 235, 0.15);
+  }
+  html, body { background: var(--bg); color: var(--text); }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  /* Phon-style card */
+  .phon-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .phon-card-hover:hover { border-color: rgba(37, 99, 235, 0.6); transition: border-color 0.15s; }
+
+  /* Phon-style primary button */
+  .btn-primary {
+    background: var(--accent); color: white; font-weight: 600;
+    border-radius: 9999px; padding: 0.5rem 1.5rem;
+    transition: background 0.15s;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Bangla nav styling */
+  .bn-nav a {
+    color: var(--text-dim);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .bn-nav a:hover, .bn-nav a.active { color: var(--accent); }
+
+  /* Suggested question button: like a Phon module row */
+  .module-row {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: left;
+    width: 100%;
+    color: var(--text);
+  }
+  .module-row:hover { border-color: var(--accent); }
+  .module-row .icon-btn {
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700; font-size: 16px; flex-shrink: 0;
+  }
+
+  /* Chat bubbles */
+  .chat-scroll { scroll-behavior: smooth; }
+  .bubble-user {
+    background: var(--accent); color: white;
+    border-radius: 16px 16px 4px 16px;
+    padding: 10px 14px;
+    max-width: 85%;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .bubble-bot {
+    background: var(--bg-3); color: var(--text);
+    border-radius: 16px 16px 16px 4px;
+    padding: 10px 14px;
+    max-width: 85%;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .bubble-bot.loading { opacity: 0.65; font-style: italic; }
+  .jump-link {
+    color: var(--accent); font-weight: 600;
+    text-decoration: none; cursor: pointer; font-size: 12px;
+  }
+  .jump-link:hover { text-decoration: underline; }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .msg-enter { animation: slideIn 0.2s ease-out; }
+
+  /* Progress pill (like Phon's 57% bar) */
+  .progress-pill {
+    height: 6px; border-radius: 9999px;
+    background: var(--bg-3);
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #16a34a, #22c55e);
+    transition: width 0.4s;
+  }
+
+  /* Search box (like Phon's "Search Lesson") */
+  .search-input {
+    background: var(--bg-3); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px 10px 38px;
+    width: 100%; font-size: 14px;
+  }
+  .search-input:focus { outline: none; border-color: var(--accent); }
+  .search-wrap { position: relative; }
+  .search-icon {
+    position: absolute; left: 12px; top: 50%;
+    transform: translateY(-50%); color: var(--text-dim);
+  }
+
+  /* Hide YouTube branding more aggressively */
+  .video-wrap iframe { display: block; }
+
+  /* Dive-deeper action buttons (DeepLearning.AI style) */
+  .dive-btn {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .dive-btn:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: white;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg-2); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #334155; }
+</style>
+</head>
+<body>
+
+<!-- Top nav (Phon-style: logo + Bangla links + icons + avatar) -->
+<header class="border-b border-slate-800 bg-[#0b0f17]">
+  <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-bold text-white text-lg">P</div>
+      <div>
+        <div class="font-bold text-lg tracking-tight">PHITRON</div>
+        <div class="text-[10px] text-slate-500 -mt-1">chat-with-video · MVP</div>
+      </div>
+    </div>
+    <nav class="bn-nav hidden md:flex items-center gap-6 text-sm">
+      <a href="#" class="active">সাপোর্ট</a>
+      <a href="#">লেকচার</a>
+      <a href="#">আমার ক্লাসরুম</a>
+      <a href="#">বুকক্যাম্প/হ্যাকাথন</a>
+      <a href="#">রিড</a>
+    </nav>
+    <div class="flex items-center gap-4 text-slate-400">
+      <span class="cursor-pointer hover:text-white" title="Toggle theme">🌙</span>
+      <span class="cursor-pointer hover:text-white" title="Notifications">🔔<span class="ml-1 text-xs text-red-400">•</span></span>
+      <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-white text-sm font-semibold">U</div>
+    </div>
+  </div>
+</header>
+
+<!-- Picker view -->
+<section id="picker" class="max-w-7xl mx-auto px-6 py-8">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold">Machine Learning — Bangla</h1>
+      <p class="text-sm text-slate-400 mt-1">Pick a lesson to start chatting with it.</p>
+    </div>
+    <div id="status" class="text-xs text-slate-400"></div>
+  </div>
+  <div id="video-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+    <div class="text-slate-400 text-sm">Loading lessons…</div>
+  </div>
+</section>
+
+<!-- Main view -->
+<section id="main" class="hidden max-w-7xl mx-auto px-6 py-6">
+
+  <!-- Breadcrumb / back -->
+  <button id="back-btn" class="mb-4 text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1">
+    <span>←</span><span>Back to all lessons</span>
+  </button>
+
+  <!-- Section title (like "Deep Learning") -->
+  <h1 id="lesson-title" class="text-2xl font-bold mb-1">Lesson</h1>
+  <p id="lesson-meta" class="text-xs text-slate-400 mb-5"></p>
+
+  <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+    <!-- Left: video + overview card -->
+    <div class="lg:col-span-3 flex flex-col gap-5">
+      <!-- Video player -->
+      <div class="video-wrap phon-card overflow-hidden aspect-video">
+        <div id="player"></div>
+      </div>
+
+      <!-- Lesson info bar (like Phon progress) -->
+      <div class="phon-card p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide">Lesson Progress</h2>
+          <span id="progress-pct" class="text-xs font-semibold text-slate-400">0%</span>
+        </div>
+        <div class="progress-pill">
+          <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+        </div>
+        <p class="text-xs text-slate-500 mt-3">
+          Ask the chatbot anything about this lesson — it answers only from the video itself.
+        </p>
+      </div>
+
+      <!-- Dive deeper on this topic (DeepLearning.AI style) -->
+      <div class="phon-card">
+        <button id="dive-toggle" class="w-full flex items-center justify-between px-5 py-3 text-left">
+          <span class="flex items-center gap-2 text-sm font-semibold text-slate-200">
+            <span class="text-blue-400">✦</span>
+            <span>Dive deeper on this topic</span>
+          </span>
+          <span id="dive-chevron" class="text-slate-400 transition-transform">▾</span>
+        </button>
+        <div id="dive-panel" class="px-5 pb-4 pt-1">
+          <div class="flex flex-wrap gap-2">
+            <button class="dive-btn" data-action="practice">Give me practice questions</button>
+            <button class="dive-btn" data-action="simple">Explain this topic in simple terms</button>
+            <button class="dive-btn" data-action="summary">Give me a summary</button>
+            <button class="dive-btn" data-action="examples">Give me real-life examples</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overview -->
+      <div class="phon-card p-5">
+        <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Overview</h3>
+        <p id="overview" class="text-sm text-slate-200 leading-relaxed"></p>
+
+        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wide mt-5 mb-2">Key Concepts</h4>
+        <div id="concepts" class="flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+
+    <!-- Right: course content (suggested questions) + chat -->
+    <div class="lg:col-span-2 flex flex-col gap-5">
+
+      <!-- "Course content" panel -->
+      <div class="phon-card p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-base font-semibold">Lesson Content</h2>
+          <span id="questions-count" class="text-xs text-slate-400">0 questions</span>
+        </div>
+
+        <!-- search box, like Phon -->
+        <div class="search-wrap mb-4">
+          <span class="search-icon">🔍</span>
+          <input id="q-search" class="search-input" type="text" placeholder="Search questions" />
+        </div>
+
+        <div id="questions" class="flex flex-col gap-2"></div>
+      </div>
+
+      <!-- Chat -->
+      <div class="phon-card flex flex-col flex-1 min-h-[480px]">
+        <div class="px-5 py-3 border-b border-slate-800">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-300">Chat with this lesson</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Answers are grounded in the video transcript only.</p>
+        </div>
+        <div id="chat-log" class="chat-scroll flex-1 overflow-y-auto p-4 space-y-3">
+          <div class="text-sm text-slate-500 text-center py-10">
+            Tap a question above or type your own below.
+          </div>
+        </div>
+        <form id="chat-form" class="border-t border-slate-800 p-3 flex gap-2">
+          <input id="chat-input"
+                 type="text"
+                 placeholder="Ask about this lesson…"
+                 autocomplete="off"
+                 class="flex-1 px-3 py-2 text-sm rounded-lg focus:outline-none"
+                 style="background: var(--bg-3); color: var(--text); border: 1px solid var(--border);" />
+          <button type="submit" class="btn-primary">Send</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer (like Phon's "Copyright warning") -->
+  <footer class="mt-10 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+    <span class="text-red-500">⚠</span>
+    <span>Demo build · Bangla ML playlist · for hackathon use</span>
+  </footer>
+</section>
+
+<script>
+/* =================================================================
+   Chat-with-the-video frontend (Phon-style dark theme)
+   ================================================================= */
+const API = "";
+const state = {
+  videos: [],
+  currentVideo: null,
+  currentSummary: null,
+  studentId: localStorage.getItem("studentId") || (() => {
+    const id = crypto.randomUUID();
+    localStorage.setItem("studentId", id);
+    return id;
+  })(),
+  player: null,
+  playerReady: false,
+  pendingSeek: null,
+  progressTimer: null,
+};
+
+/* ---------- YouTube IFrame API ---------- */
+const tag = document.createElement("script");
+tag.src = "https://www.youtube.com/iframe_api";
+document.head.appendChild(tag);
+window.onYouTubeIframeAPIReady = () => { /* lazy */ };
+
+/* ---------- DOM helpers ---------- */
+const $ = (id) => document.getElementById(id);
+function el(tag, attrs = {}, children = []) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") node.className = v;
+    else if (k === "onClick") node.addEventListener("click", v);
+    else if (k === "html") node.innerHTML = v;
+    else node.setAttribute(k, v);
+  }
+  for (const c of children) {
+    if (typeof c === "string") node.appendChild(document.createTextNode(c));
+    else if (c) node.appendChild(c);
+  }
+  return node;
+}
+function fmtTime(seconds) {
+  if (seconds == null) return "";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/* ---------- API ---------- */
+async function fetchVideos() {
+  const r = await fetch(`${API}/api/videos`);
+  if (!r.ok) throw new Error("Failed to load lessons");
+  return r.json();
+}
+async function fetchVideo(id) {
+  const r = await fetch(`${API}/api/videos/${encodeURIComponent(id)}`);
+  if (!r.ok) throw new Error("Failed to load lesson");
+  return r.json();
+}
+async function postChat(videoId, question) {
+  const r = await fetch(`${API}/api/videos/${encodeURIComponent(videoId)}/chat`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({question, student_id: state.studentId}),
+  });
+  if (!r.ok) throw new Error(`Chat failed: ${await r.text()}`);
+  return r.json();
+}
+
+/* ---------- Picker ---------- */
+function renderPicker(videos) {
+  const grid = $("video-grid");
+  grid.innerHTML = "";
+  if (!videos.length) {
+    grid.appendChild(el("div", {class: "text-slate-400 text-sm col-span-full"}, [
+      "No processed videos yet. POST to /api/videos with a YouTube URL to add one."
+    ]));
+    return;
+  }
+  videos.forEach((v, i) => {
+    const card = el("button", {
+      class: "phon-card phon-card-hover text-left p-5 cursor-pointer transition",
+      onClick: () => selectVideo(v),
+    }, [
+      el("div", {class: "flex items-start justify-between mb-3"}, [
+        el("div", {class: "text-xs text-slate-500 font-mono"}, [`Lesson ${String(i + 1).padStart(2, "0")}`]),
+        el("div", {class: "text-xs px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20"}, [
+          `${v.summary?.key_concepts?.length || 0} concepts`
+        ]),
+      ]),
+      el("h3", {class: "font-semibold text-base leading-snug line-clamp-2 mb-2"}, [
+        prettifyTitle(v.title, v.source_id)
+      ]),
+      el("p", {class: "text-xs text-slate-500 font-mono mb-3"}, [v.source_id]),
+      v.summary ? el("p", {class: "text-xs text-slate-400 line-clamp-3 leading-relaxed"}, [
+        v.summary.overview
+      ]) : null,
+    ]);
+    grid.appendChild(card);
+  });
+}
+
+function prettifyTitle(title, sourceId) {
+  if (!title || title.startsWith("YouTube ")) return `Lesson · ${sourceId}`;
+  // Trim trailing " | Channel Name" parts
+  let t = title.replace(/\s*\|\s*[^-|]+$/, "").trim();
+  return t.length > 80 ? t.slice(0, 77) + "…" : t;
+}
+
+/* ---------- Main view ---------- */
+function renderMain(video) {
+  $("picker").classList.add("hidden");
+  $("main").classList.remove("hidden");
+  $("lesson-title").textContent = prettifyTitle(video.title, video.source_id);
+  $("lesson-meta").textContent = `Source: ${video.source_id}`;
+
+  const summary = video.summary || {overview: "(no summary yet)", key_concepts: [], suggested_questions: []};
+  state.currentSummary = summary;
+  $("overview").textContent = summary.overview;
+
+  const concepts = $("concepts");
+  concepts.innerHTML = "";
+  (summary.key_concepts || []).forEach(c => {
+    concepts.appendChild(el("span", {
+      class: "inline-block text-xs px-2 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700"
+    }, [c]));
+  });
+
+  renderQuestions(summary.suggested_questions || []);
+
+  // Reset chat + progress
+  $("chat-log").innerHTML = "";
+  $("chat-log").appendChild(el("div", {class: "text-sm text-slate-500 text-center py-10"}, [
+    "Tap a question above or type your own below."
+  ]));
+  $("progress-fill").style.width = "0%";
+  $("progress-pct").textContent = "0%";
+
+  loadPlayer(video.source_id);
+}
+
+function renderQuestions(questions) {
+  const box = $("questions");
+  box.innerHTML = "";
+  $("questions-count").textContent = `${questions.length} question${questions.length === 1 ? "" : "s"}`;
+  questions.forEach((q, i) => {
+    const row = el("button", {
+      class: "module-row",
+      onClick: () => sendQuestion(q),
+    }, [
+      el("div", {class: "flex-1 min-w-0"}, [
+        el("div", {class: "text-sm font-medium truncate"}, [q]),
+        el("div", {class: "text-xs text-slate-500 mt-0.5"}, [`Question ${String(i + 1).padStart(2, "0")} · click to ask`]),
+      ]),
+      el("span", {class: "icon-btn"}, ["+"]),
+    ]);
+    box.appendChild(row);
+  });
+}
+
+/* Filter questions by search */
+$("q-search").addEventListener("input", (e) => {
+  const q = e.target.value.toLowerCase().trim();
+  const all = state.currentSummary?.suggested_questions || [];
+  renderQuestions(q ? all.filter(x => x.toLowerCase().includes(q)) : all);
+});
+
+/* ---------- Player ---------- */
+function loadPlayer(videoId) {
+  if (state.player) {
+    state.player.loadVideoById(videoId);
+    state.pendingSeek = null;
+    return;
+  }
+  state.player = new YT.Player("player", {
+    videoId,
+    playerVars: { rel: 0, modestbranding: 1, color: "white" },
+    events: {
+      onReady: (e) => {
+        state.playerReady = true;
+        if (state.pendingSeek != null) {
+          state.player.seekTo(state.pendingSeek, true);
+          state.player.playVideo();
+          state.pendingSeek = null;
+        }
+        startProgressTracking();
+      },
+    },
+  });
+}
+function seekTo(seconds) {
+  if (state.player && state.playerReady && state.player.seekTo) {
+    state.player.seekTo(seconds, true);
+    state.player.playVideo();
+  } else {
+    state.pendingSeek = seconds;
+  }
+}
+function startProgressTracking() {
+  if (state.progressTimer) clearInterval(state.progressTimer);
+  state.progressTimer = setInterval(() => {
+    if (!state.player || !state.playerReady || !state.player.getCurrentTime) return;
+    const cur = state.player.getCurrentTime();
+    const dur = state.player.getDuration();
+    if (dur > 0) {
+      const pct = Math.min(100, Math.round((cur / dur) * 100));
+      $("progress-fill").style.width = pct + "%";
+      $("progress-pct").textContent = pct + "%";
+    }
+  }, 2000);
+}
+
+/* ---------- Chat ---------- */
+async function sendQuestion(text) {
+  const v = state.currentVideo;
+  if (!v) return;
+  const input = $("chat-input");
+  const question = (text ?? input.value).trim();
+  if (!question) return;
+  input.value = "";
+
+  // Remove hint if present
+  const hint = $("chat-log").querySelector(".text-slate-500.text-center");
+  if (hint) hint.remove();
+
+  appendMessage("user", question);
+  const loadingId = appendMessage("assistant", "Thinking…", {loading: true});
+
+  try {
+    const resp = await postChat(v.id, question);
+    replaceMessage(loadingId, "assistant", resp.answer, {
+      timestamp: resp.cited_timestamp,
+      citation: resp.cited_text,
+    });
+  } catch (e) {
+    replaceMessage(loadingId, "assistant", "Sorry, something went wrong: " + e.message);
+  }
+}
+
+function appendMessage(role, text, opts = {}) {
+  const log = $("chat-log");
+  const id = "msg-" + Math.random().toString(36).slice(2);
+  const isUser = role === "user";
+  const wrap = el("div", {
+    id,
+    class: `msg-enter flex ${isUser ? "justify-end" : "justify-start"}`,
+  });
+  const bubble = el("div", {
+    class: `bubble-${isUser ? "user" : "bot"}${opts.loading ? " loading" : ""}`,
+  }, [text]);
+  wrap.appendChild(bubble);
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+  return id;
+}
+
+function replaceMessage(id, role, text, opts = {}) {
+  const node = document.getElementById(id);
+  if (!node) return;
+  const bubble = node.firstChild;
+  bubble.classList.remove("loading");
+  bubble.textContent = text;
+  if (opts.timestamp != null) {
+    const link = el("button", {
+      class: "jump-link ml-2 block mt-1",
+      onClick: () => seekTo(opts.timestamp),
+    }, [`▶ Jump to ${fmtTime(opts.timestamp)}`]);
+    bubble.appendChild(link);
+  }
+  $("chat-log").scrollTop = $("chat-log").scrollHeight;
+}
+
+/* ---------- View switching ---------- */
+async function selectVideo(video) {
+  state.currentVideo = video;
+  try {
+    const full = await fetchVideo(video.id);
+    renderMain(full);
+  } catch (e) {
+    alert("Failed to load lesson: " + e.message);
+  }
+}
+
+$("back-btn").addEventListener("click", () => {
+  state.currentVideo = null;
+  $("main").classList.add("hidden");
+  $("picker").classList.remove("hidden");
+  if (state.progressTimer) {
+    clearInterval(state.progressTimer);
+    state.progressTimer = null;
+  }
+});
+
+$("chat-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  sendQuestion();
+});
+
+/* ---------- Dive Deeper actions (DeepLearning.AI pattern) ---------- */
+const DIVE_PROMPTS = {
+  practice: "Create 3 practice questions for the student based on the topics in this video. For each question, give a short hint that points to the part of the video where the answer can be found.",
+  simple:   "Explain the main topic of this video in very simple terms, as if to a beginner who has never seen it before. Use a short paragraph.",
+  summary:  "Give me a concise 3-sentence summary of this video.",
+  examples: "Give me 2-3 real-life examples of the concepts taught in this video. Keep them concrete and short.",
+};
+
+document.querySelectorAll(".dive-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const action = btn.dataset.action;
+    const prompt = DIVE_PROMPTS[action];
+    if (prompt) sendQuestion(prompt);
+  });
+});
+
+// Toggle the dive-deeper panel
+const divePanel = $("dive-panel");
+const diveChevron = $("dive-chevron");
+$("dive-toggle").addEventListener("click", () => {
+  const collapsed = divePanel.classList.toggle("hidden");
+  diveChevron.style.transform = collapsed ? "rotate(-90deg)" : "rotate(0deg)";
+});
+
+/* ---------- Init ---------- */
+(async function init() {
+  try {
+    state.videos = await fetchVideos();
+    renderPicker(state.videos);
+    $("status").textContent = `${state.videos.length} lesson${state.videos.length === 1 ? "" : "s"} ready`;
+  } catch (e) {
+    $("status").textContent = "Backend unreachable";
+    $("video-grid").innerHTML = `<div class="text-red-400 text-sm">Could not load lessons: ${e.message}</div>`;
+  }
+})();
+</script>
+</body>
+</html>
