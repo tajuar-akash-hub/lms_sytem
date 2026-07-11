@@ -488,9 +488,16 @@ $("q-search").addEventListener("input", (e) => {
 /* ---------- Player ---------- */
 function loadPlayer(videoId) {
   if (state.player) {
-    state.player.loadVideoById(videoId);
-    state.pendingSeek = null;
-    return;
+    // If the previous player was destroyed, the iframe is gone — rebuild from scratch
+    try {
+      state.player.loadVideoById(videoId);
+      state.pendingSeek = null;
+      return;
+    } catch (e) {
+      state.player = null;
+      state.playerReady = false;
+      document.getElementById("player").innerHTML = "";
+    }
   }
   state.player = new YT.Player("player", {
     videoId,
@@ -605,10 +612,24 @@ $("back-btn").addEventListener("click", () => {
   state.currentVideo = null;
   $("main").classList.add("hidden");
   $("picker").classList.remove("hidden");
+
+  // Stop progress tracking
   if (state.progressTimer) {
     clearInterval(state.progressTimer);
     state.progressTimer = null;
   }
+
+  // Tear down the YouTube player so audio doesn't keep playing in the background
+  if (state.player) {
+    try { state.player.stopVideo(); } catch (_) {}
+    try { state.player.destroy(); } catch (_) {}
+    state.player = null;
+    state.playerReady = false;
+    state.pendingSeek = null;
+  }
+  // Clear the player container so the iframe is fully removed
+  const playerEl = document.getElementById("player");
+  if (playerEl) playerEl.innerHTML = "";
 });
 
 $("chat-form").addEventListener("submit", (e) => {
