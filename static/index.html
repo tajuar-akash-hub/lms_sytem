@@ -101,6 +101,7 @@
     to   { opacity: 1; transform: translateY(0); }
   }
   .msg-enter { animation: slideIn 0.2s ease-out; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
   /* Progress pill (like Phon's 57% bar) */
   .progress-pill {
@@ -189,7 +190,13 @@
       <h1 class="text-2xl font-bold">Machine Learning — Bangla</h1>
       <p class="text-sm text-slate-400 mt-1">Pick a lesson to start chatting with it.</p>
     </div>
-    <div id="status" class="text-xs text-slate-400"></div>
+    <div class="flex items-center gap-3">
+      <button id="refresh-btn" class="text-sm px-3 py-2 rounded-lg border border-slate-700 hover:border-blue-500 hover:bg-blue-500/10 transition flex items-center gap-2">
+        <span id="refresh-icon">⟳</span>
+        <span id="refresh-label">Check for new uploads</span>
+      </button>
+      <span id="status" class="text-xs text-slate-400"></span>
+    </div>
   </div>
   <div id="video-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
     <div class="text-slate-400 text-sm">Loading lessons…</div>
@@ -644,6 +651,49 @@ $("dive-toggle").addEventListener("click", () => {
     $("video-grid").innerHTML = `<div class="text-red-400 text-sm">Could not load lessons: ${e.message}</div>`;
   }
 })();
+
+/* ---------- Manual refresh (poll playlist for new videos) ---------- */
+const PLAYLIST_ID = "PLLlxv6oRta6CTZ2KilPHuc1oQ9PMTKOug"; // current MLOps playlist
+
+$("refresh-btn").addEventListener("click", async () => {
+  const btn = $("refresh-btn");
+  const icon = $("refresh-icon");
+  const label = $("refresh-label");
+  const status = $("status");
+
+  btn.disabled = true;
+  icon.style.animation = "spin 1s linear infinite";
+  label.textContent = "Checking…";
+  status.textContent = "Looking for new videos…";
+
+  try {
+    const r = await fetch(`${API}/internal/check-playlist`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({playlist_id: PLAYLIST_ID, dry_run: false}),
+    });
+    const result = await r.json();
+    const newly = (result.newly_processed || []).length;
+    const errs = (result.errors || []).length;
+
+    if (newly > 0) {
+      status.textContent = `+${newly} new processed${errs ? ` (${errs} error${errs===1?"":"s"})` : ""}`;
+      // Reload the picker to show the new lessons
+      state.videos = await fetchVideos();
+      renderPicker(state.videos);
+    } else if (errs > 0) {
+      status.textContent = `No new videos; ${errs} error${errs===1?"":"s"} during check`;
+    } else {
+      status.textContent = "Already up to date";
+    }
+  } catch (e) {
+    status.textContent = "Check failed: " + e.message;
+  } finally {
+    btn.disabled = false;
+    icon.style.animation = "";
+    label.textContent = "Check for new uploads";
+  }
+});
 </script>
 </body>
 </html>

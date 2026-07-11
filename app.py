@@ -46,6 +46,19 @@ class ProcessVideoRequest(BaseModel):
     url_or_id: str = Field(..., description="YouTube URL or 11-char video ID")
 
 
+class PlaylistPollRequest(BaseModel):
+    playlist_id: str = Field(..., description="YouTube playlist ID (the part after list=)")
+    dry_run: bool = Field(default=False, description="If true, just report what would be processed")
+
+
+class LMSWebhookPayload(BaseModel):
+    """Payload from the LMS when a new video is uploaded."""
+    video_url: str = Field(..., description="URL or ID of the video to process")
+    source_type: str = Field(default="youtube", description="Source platform (youtube, s3, etc.)")
+    title: Optional[str] = None
+    metadata: Optional[dict] = None
+
+
 class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
     student_id: Optional[str] = None  # if absent, a session UUID is used
@@ -371,6 +384,62 @@ def process_video(req: ProcessVideoRequest):
         "n_chunks": result["n_chunks"],
         "summary": result["summary"],
     }
+
+
+@app.post("/internal/check-playlist")
+def check_playlist(req: PlaylistPollRequest):
+    """Poll a YouTube playlist and process any new videos not yet in the DB.
+
+    Designed to be called by a Render Cron Job on a schedule (e.g., every
+    15 minutes). Returns a summary of what was processed.
+    """
+    from auto_process import check_playlist_for_new_videos
+
+    try:
+        result = check_playlist_for_new_videos(req.playlist_id, dry_run=req.dry_run)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Playlist check failed: {e!s}")
+
+    return result
+
+
+@app.post("/webhook/video-uploaded")
+def lms_video_uploaded(payload: LMSWebhookPayload):
+    """Webhook endpoint for the LMS to call when a new video is uploaded.
+
+    In production, the LMS will POST this with the video's URL/ID and we'll
+    run the pipeline to make it chat-ready. For YouTube videos we use the
+    same audio-transcription path. For LMS-hosted videos, the URL can point
+    to an S3/R2 object we'll download and transcribe.
+    """
+    from auto_process import process_lms_webhook
+
+    try:
+        result = process_lms_webhook(
+            video_url_or_id=payload.video_url,
+            source_type=payload.source_type,
+            title=payload.title,
+            metadata=payload.metadata,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Webhook processing failed: {e!s}")
+
+    return result
+
+
+@app.get("/internal/health")
+def health():
+    """Lightweight health check — also confirms DB connectivity."""
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT count(*) FROM videos;")
+        n = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return {"status": "ok", "video_count": n}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"DB unavailable: {e!s}")
 
 
 @app.post("/api/videos/{video_id}/chat")
