@@ -17,38 +17,45 @@ services:
       - key: PYTHON_VERSION
         value: 3.12.4
 
-  - type: cron
-    name: chat-with-video-poll
-    runtime: python
-    plan: free
-    schedule: "*/15 * * * *"
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: >
-      python -c "
-      import os, urllib.request, json
-      web = os.environ['RENDER_EXTERNAL_URL']
-      req = urllib.request.Request(
-          web + '/internal/check-playlist',
-          data=json.dumps({'playlist_id': os.environ['PLAYLIST_ID']}).encode(),
-          headers={'Content-Type': 'application/json', 'X-Render-Internal': 'cron'},
-          method='POST',
-      )
-      try:
-          r = urllib.request.urlopen(req, timeout=500)
-          print(r.read().decode())
-      except Exception as e:
-          print('poll failed:', e)
-      "
-    envVars:
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GROQ_API_KEY
-        sync: false
-      - key: DATABASE_URL
-        sync: false
-      - key: PLAYLIST_ID
-        value: PLLlxv6oRta6CTZ2KilPHuc1oQ9PMTKOug
-      - fromService:
-          type: web
-          name: chat-with-video
-          envVarKey: RENDER_EXTERNAL_URL
+# NOTE: Cron job was removed because Render cron services require the
+# paid "Starter" plan ($1/mo minimum). For hackathon purposes, use the
+# "Check for new uploads" button on the frontend (calls
+# POST /internal/check-playlist manually). When ready to enable auto
+# polling, upgrade to a paid plan and uncomment the cron block below.
+
+#  - type: cron
+#    name: chat-with-video-poll
+#    runtime: python
+#    plan: starter
+#    schedule: "*/15 * * * *"
+#    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+#    startCommand: >
+#      python -c "
+#      import os, urllib.request, json
+#      web = os.environ['RENDER_EXTERNAL_URL']
+#      req = urllib.request.Request(
+#          web + '/internal/check-playlist',
+#          data=json.dumps({'playlist_id': os.environ['PLAYLIST_ID']}).encode(),
+#          headers={'Content-Type': 'application/json'},
+#          method='POST',
+#      )
+#      try:
+#          r = urllib.request.urlopen(req, timeout=500)
+#          print(r.read().decode())
+#      except Exception as e:
+#          print('poll failed:', e)
+#      "
+#    envVars:
+#      - key: GEMINI_API_KEY
+#        sync: false
+#      - key: GROQ_API_KEY
+#        sync: false
+#      - key: DATABASE_URL
+#        sync: false
+#      - key: PLAYLIST_ID
+#        value: PLLlxv6oRta6CTZ2KilPHuc1oQ9PMTKOug
+#      - key: RENDER_EXTERNAL_URL
+#        fromService:
+#          type: web
+#          name: chat-with-video
+#          property: hostUrl
