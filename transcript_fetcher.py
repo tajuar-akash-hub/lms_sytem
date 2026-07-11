@@ -1,14 +1,18 @@
 """Fetch YouTube transcripts as timestamped segments.
 
-Two strategies, tried in order:
-  1. youtube-transcript-api: pulls official or auto-generated captions
-     directly. Free, no API key, fast — but YouTube IP-blocks quickly.
-  2. yt-dlp + Groq Whisper (primary ASR) or Gemini ASR (fallback):
-     downloads the audio track and transcribes it.
+Production behavior: ALWAYS transcribe the audio, never rely on YouTube
+captions. In production the LMS provides its own video files, so there
+won't be a captions track. Using Whisper (via Groq) as the primary ASR
+gives consistent, high-quality Bangla transcripts regardless of source.
+
+Strategy:
+  1. Download the audio track with yt-dlp (extracts mp3 via ffmpeg).
+  2. Send the audio to Groq's hosted Whisper (whisper-large-v3-turbo).
+  3. If Groq fails (rate limit, etc.), fall back to Gemini ASR.
 
 The function always returns TranscriptSegment objects with the same
 shape, so downstream code (chunking, embedding, chat) doesn't care
-which strategy succeeded.
+which provider succeeded.
 """
 from __future__ import annotations
 
@@ -17,18 +21,10 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
-
-from youtube_transcript_api import (
-    IpBlocked,
-    NoTranscriptFound,
-    RequestBlocked,
-    TranscriptsDisabled,
-    VideoUnavailable,
-    YouTubeTranscriptApi,
-)
 
 
 def _find_ffmpeg_dir() -> Optional[str]:
@@ -121,79 +117,23 @@ def extract_video_id(url_or_id: str) -> str:
 def fetch_transcript(
     url_or_id: str,
     preferred_languages: Optional[List[str]] = None,
-    use_asr_fallback: bool = True,
 ) -> List[TranscriptSegment]:
-    """Fetch the transcript for a video.
+    """Fetch the transcript for a video by always transcribing its audio.
 
-    Strategy:
-      1. Try youtube-transcript-api for Bangla/English captions.
-      2. If that fails (IP ban, no captions, etc.) AND use_asr_fallback
-         is True, download the audio with yt-dlp and transcribe it via
-         Groq Whisper (primary) or Gemini (fallback).
+    Production behavior: always use audio transcription (Whisper via Groq),
+    never YouTube captions. In production the LMS supplies the video file
+    directly, so the caption track may not exist.
+
+    Order:
+      1. Groq Whisper (whisper-large-v3-turbo) — primary.
+      2. Gemini ASR — fallback if Groq fails.
     """
-    if preferred_languages is None:
-        preferred_languages = ["bn", "en"]
-
     video_id = extract_video_id(url_or_id)
-
-    # ---- Strategy 1: YouTube captions ----
     try:
-        segs = _fetch_via_youtube_api(video_id, preferred_languages)
-        if segs:
-            return segs
-    except (IpBlocked, RequestBlocked):
-        if use_asr_fallback:
-            try:
-                return _fetch_via_groq_whisper(video_id)
-            except Exception as e:
-                print(f"      (Groq ASR failed: {e!r}, falling back to Gemini)")
-                return _fetch_via_gemini_asr(video_id)
-        raise
-    except (VideoUnavailable, TranscriptsDisabled):
-        raise RuntimeError(f"Video unavailable or captions disabled: {video_id}")
-    except NoTranscriptFound:
-        if use_asr_fallback:
-            try:
-                return _fetch_via_groq_whisper(video_id)
-            except Exception as e:
-                print(f"      (Groq ASR failed: {e!r}, falling back to Gemini)")
-                return _fetch_via_gemini_asr(video_id)
-        raise RuntimeError(f"No transcript available for {video_id}")
-
-    if use_asr_fallback:
-        try:
-            return _fetch_via_groq_whisper(video_id)
-        except Exception as e:
-            print(f"      (Groq ASR failed: {e!r}, falling back to Gemini)")
-            return _fetch_via_gemini_asr(video_id)
-    return []
-
-
-def _fetch_via_youtube_api(
-    video_id: str, preferred_languages: List[str]
-) -> List[TranscriptSegment]:
-    api = YouTubeTranscriptApi()
-    transcript_list = api.list(video_id)
-
-    for lang in preferred_languages:
-        try:
-            t = transcript_list.find_transcript([lang])
-            fetched = t.fetch()
-            return [
-                TranscriptSegment(text=s.text, start=s.start, duration=s.duration)
-                for s in fetched
-            ]
-        except NoTranscriptFound:
-            continue
-
-    # Fall back: take any transcript and translate to Bangla
-    any_t = next(iter(transcript_list))
-    translated = any_t.translate("bn")
-    fetched = translated.fetch()
-    return [
-        TranscriptSegment(text=s.text, start=s.start, duration=s.duration)
-        for s in fetched
-    ]
+        return _fetch_via_groq_whisper(video_id)
+    except Exception as e:
+        print(f"      (Groq ASR failed: {e!r}, falling back to Gemini)")
+        return _fetch_via_gemini_asr(video_id)
 
 
 def _fetch_via_groq_whisper(video_id: str) -> List[TranscriptSegment]:
