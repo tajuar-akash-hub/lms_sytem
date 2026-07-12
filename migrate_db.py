@@ -3,8 +3,15 @@
 Reads all rows from the 4 app tables on the OLD DB (from .env's DATABASE_URL)
 and inserts them into the NEW DB (from .env's NEW_DATABASE_URL).
 
+PREREQUISITES (run once on the new DB before this script):
+    alembic upgrade head
+
+This creates the videos, transcript_chunks, video_summaries, and
+chat_messages tables (plus the LMS app's other tables). Without the
+migration, this script will fail with "relation does not exist".
+
 Run with:
-    OLD_DATABASE_URL=... NEW_DATABASE_URL=... python migrate_db.py
+    OLD_DATABASE_URL=... DATABASE_URL=... python migrate_db.py
 
 Or just set both in .env and run: python migrate_db.py
 """
