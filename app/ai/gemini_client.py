@@ -33,9 +33,13 @@ Two kinds of questions, two kinds of answers:
 
 A) CONTENT questions — the student is asking about the VIDEO itself
    (e.g. "what is backpropagation", "explain the math", "summarize this video").
-   - Answer ONLY using the transcript excerpts.
-   - If the excerpts do not cover it, say plainly: "The provided video
-     excerpts do not contain information about that." Do NOT guess.
+   - Answer using the transcript excerpts as your primary source.
+   - If the excerpts PARTIALLY cover the question, give what is there and
+     mention which part of the video discusses it. It is better to say
+     "the video mentions X at 2:30 but does not go into Y" than to refuse.
+   - Only refuse ("The provided video excerpts do not contain information
+     about that") if NONE of the excerpts are even topically related to
+     the question. Do NOT guess outside information.
    - Cite a timestamp inline like "(at 4:23 in the video)".
    - Set cited_timestamp to the start_time of the excerpt you used.
 
@@ -125,7 +129,7 @@ def call_llm_json(
         "gemini-flash-latest",
     ]
     for model_name in models:
-        for attempt in range(2):
+        for attempt in range(3):
             try:
                 resp = client.models.generate_content(
                     model=model_name,
@@ -145,7 +149,8 @@ def call_llm_json(
                     or "quota" in err_str.lower()
                 ):
                     return "QUOTA"
-                time.sleep(2**attempt)
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
     return None
 
 

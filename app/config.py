@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     gemini_gen_model: str = "gemini-2.5-flash"
     gemini_embed_model: str = "gemini-embedding-001"
     embed_dim: int = 768
-    top_k_chunks: int = 5
+    top_k_chunks: int = 8
     max_history_turns: int = 3
     video_chunk_seconds: float = 60.0
 
