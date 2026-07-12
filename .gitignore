@@ -1,11 +1,42 @@
-node_modules/
+# Environment / secrets
 .env
 .env.local
-.env*.local
+.env.*.local
 
+# Python
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
 .venv/
 venv/
+env/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+server.log
+
+# Test artifacts
 .pytest_cache/
-*.egg-info/
+htmlcov/
+.coverage
+
+# yt-dlp temp downloads
+*.mp3
+*.m4a
+*.webm
+*.part
+
+# Misc scratch files
+new_playlist.txt
+playlist_raw.txt
+playlist_videos.tsv
+*.html.bak
