@@ -34,6 +34,7 @@ GEN_MODEL = "gemini-2.5-flash"
 EMBED_MODEL = "gemini-embedding-001"
 EMBED_DIM = 768
 TOP_K_CHUNKS = 5
+MAX_HISTORY_TURNS = 3  # how many prior Q&A pairs to include in the prompt for memory
 
 if not DATABASE_URL or not GEMINI_API_KEY:
     raise SystemExit("DATABASE_URL and GEMINI_API_KEY must be set in .env")
@@ -144,6 +145,33 @@ def retrieve_chunks(video_uuid: str, query_embedding: List[float], top_k: int = 
     ]
 
 
+def fetch_recent_history(video_uuid: str, student_id: str, n_turns: int = MAX_HISTORY_TURNS) -> List[dict]:
+    """Return the last n_turns user/assistant exchanges for this student+video, oldest first.
+
+    Uses the chat_messages_video_student_idx index for fast lookup.
+    """
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT role, content, cited_timestamp, created_at
+        FROM chat_messages
+        WHERE video_id = %s AND student_id = %s
+        ORDER BY created_at DESC
+        LIMIT %s;
+        """,
+        (video_uuid, student_id, n_turns * 2),
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    # rows come newest-first; reverse to chronological order for the prompt
+    return [
+        {"role": r[0], "content": r[1], "cited_timestamp": r[2]}
+        for r in reversed(rows)
+    ]
+
+
 CHAT_SYSTEM_PROMPT = """You are a tutor for a Bangla machine-learning course.
 The student is watching a specific video and has asked a question about it.
 
@@ -158,6 +186,10 @@ Rules:
 4. When you use information from a specific excerpt, mention the timestamp
    inline like "(at 4:23 in the video)".
 5. Do not repeat the question.
+6. You may also see the recent conversation history for this lesson. Use it
+   only to resolve references like "that", "it", "this concept", or
+   follow-up questions. Every factual claim must still be grounded in the
+   transcript excerpts above.
 
 Output a single JSON object with keys:
   - answer: your response to the student (string)
@@ -226,8 +258,13 @@ def _call_llm_json_groq(system_prompt: str, user_prompt: str, temperature: float
         return None
 
 
-def answer_question(video_uuid: str, source_id: str, question: str) -> dict:
-    """RAG: retrieve chunks, ask the LLM, return grounded answer with timestamp."""
+def answer_question(video_uuid: str, source_id: str, question: str, history: Optional[List[dict]] = None) -> dict:
+    """RAG: retrieve chunks, ask the LLM, return grounded answer with timestamp.
+
+    If `history` is provided (oldest-first list of prior turns with
+    role/content/cited_timestamp), it is injected into the prompt so the
+    model can resolve follow-up references like "it" or "that".
+    """
     q_emb = embed_query(question)
     chunks = retrieve_chunks(video_uuid, q_emb, top_k=TOP_K_CHUNKS)
     if not chunks:
@@ -244,9 +281,19 @@ def answer_question(video_uuid: str, source_id: str, question: str) -> dict:
         context_lines.append(f"[{mm}:{ss:02d}] {c['text']}")
     context = "\n".join(context_lines)
 
+    # Build conversation-history block (oldest first) if any
+    history_block = ""
+    if history:
+        history_lines = ["Previous conversation in this lesson (oldest first):"]
+        for turn in history:
+            prefix = "Student" if turn["role"] == "user" else "Tutor"
+            history_lines.append(f"{prefix}: {turn['content']}")
+        history_block = "\n".join(history_lines) + "\n\n"
+
     user_prompt = (
         f"YouTube video ID: {source_id}\n\n"
         f"Transcript excerpts (with timestamps):\n\n{context}\n\n"
+        f"{history_block}"
         f"Student question: {question}"
     )
 
@@ -465,7 +512,11 @@ def chat(video_id: str, req: ChatRequest):
     student_id = req.student_id or str(uuid.uuid4())
     message_id = str(uuid.uuid4())
 
-    # Save the user's message first
+    # Load prior conversation history BEFORE saving the new user message
+    # so the new turn doesn't appear at the top of the history block.
+    history = fetch_recent_history(real_uuid, student_id, n_turns=MAX_HISTORY_TURNS)
+
+    # Save the user's message
     cur.execute(
         """
         INSERT INTO chat_messages (id, student_id, video_id, role, content)
@@ -477,7 +528,7 @@ def chat(video_id: str, req: ChatRequest):
     cur.close()
     conn.close()
 
-    result = answer_question(real_uuid, source_id, req.question)
+    result = answer_question(real_uuid, source_id, req.question, history=history)
 
     # Save the assistant's reply
     conn = get_conn()

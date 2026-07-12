@@ -22,3 +22,20 @@ python app.py          # runs on http://localhost:8000
 
 ## Deploy on Render
 See `DEPLOY.md` for step-by-step instructions.
+
+## Keep-alive (Render free tier)
+Render's free tier spins the web service down after ~15 minutes of no traffic,
+so the first request after idle hits a cold start (~30s). To keep the demo
+always responsive, this repo includes `.github/workflows/keep-alive.yml`,
+which pings `/internal/health` every 10 minutes from GitHub Actions.
+
+One-time setup:
+1. GitHub repo -> **Settings -> Secrets and variables -> Actions**.
+2. Add a repository secret named `RENDER_URL` with your Render service URL
+   (e.g. `https://chat-with-video.onrender.com` — no trailing slash).
+3. Push the workflow file. The Actions tab will start showing the runs on
+   schedule. You can also trigger it manually with `workflow_dispatch`.
+
+Notes:
+- Uses your Render monthly "always-on" hours (750 hr/mo free).
+- Cold starts can still briefly 503 — the workflow does not fail the build.

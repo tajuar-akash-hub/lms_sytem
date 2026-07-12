@@ -1,0 +1,57 @@
+name: Keep Render Service Alive
+
+# Render's free-tier web services spin down after ~15 minutes of inactivity.
+# This workflow pings the /internal/health endpoint every 10 minutes to keep
+# the service warm so the demo is always responsive.
+#
+# Setup (one time):
+#   1. Go to your repo on GitHub -> Settings -> Secrets and variables -> Actions
+#   2. Add a new repository secret:
+#        Name:  RENDER_URL
+#        Value: https://<your-service-name>.onrender.com
+#              (no trailing slash; the part Render shows in the dashboard)
+#   3. Push this file to the `Akash` branch (or `main`) and merge.
+#   4. The Actions tab will show the workflow running on schedule.
+#
+# Notes:
+#   - Render free tier still counts "always-on" hours against the 750 hr/mo
+#     quota, so this trades continuous uptime for predictability.
+#   - The /internal/health endpoint already exists in app.py and verifies DB
+#     connectivity, so each ping also catches silent outages.
+
+on:
+  schedule:
+    # Every 10 minutes. Cron format: minute hour day month weekday
+    - cron: "*/10 * * * *"
+  workflow_dispatch: # allow manual trigger from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping the live Render service
+        env:
+          RENDER_URL: ${{ secrets.RENDER_URL }}
+        run: |
+          if [ -z "$RENDER_URL" ]; then
+            echo "::error::RENDER_URL secret is not set. Add it under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+          URL="${RENDER_URL%/}/internal/health"
+          echo "Pinging $URL"
+
+          # -f: fail on HTTP >= 400
+          # -s: silent mode
+          # --max-time 25: give Render time to wake from sleep (cold start can take ~30s)
+          HTTP_CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" --max-time 25 "$URL" || echo "000")
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "OK  service is up"
+            cat /tmp/health.json
+          else
+            echo "WARN service responded with HTTP $HTTP_CODE"
+            cat /tmp/health.json || true
+            # Don't fail the workflow — Render cold starts can briefly 503.
+          fi
