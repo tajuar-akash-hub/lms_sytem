@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     supabase_anon_key: str = ""
     supabase_jwt_secret: str = ""
     backend_cors_origins: str = "http://localhost:3000,http://localhost:8000"
+    gemini_api_key: str = ""
+    groq_api_key: str = ""
+    gemini_gen_model: str = "gemini-2.5-flash"
+    gemini_embed_model: str = "gemini-embedding-001"
+    embed_dim: int = 768
+    top_k_chunks: int = 5
+    max_history_turns: int = 3
+    video_chunk_seconds: float = 60.0
 
     @property
     def async_database_url(self) -> str:
@@ -69,6 +77,14 @@ class Settings(BaseSettings):
             for origin in self.backend_cors_origins.split(",")
             if origin.strip()
         ]
+
+    @property
+    def ai_configured(self) -> bool:
+        return bool(self.gemini_api_key)
+
+    @property
+    def groq_configured(self) -> bool:
+        return bool(self.groq_api_key)
 
     @property
     def supabase_configured(self) -> bool:

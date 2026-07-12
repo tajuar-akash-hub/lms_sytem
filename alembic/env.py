@@ -10,6 +10,7 @@ import pgvector.sqlalchemy  # noqa: F401
 from app.database import Base
 from app.models import (  # noqa: F401
     AIInterview,
+    ChatMessage,
     DailyActivityLog,
     Exam,
     LeagueGroup,
@@ -24,6 +25,9 @@ from app.models import (  # noqa: F401
     Student,
     StudentExamResult,
     StudentModuleProgress,
+    TranscriptChunk,
+    Video,
+    VideoSummary,
 )
 
 load_dotenv(".env.local")

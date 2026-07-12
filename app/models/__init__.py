@@ -60,6 +60,7 @@ class Module(Base):
         back_populates="module", uselist=False
     )
     exams: Mapped[list["Exam"]] = relationship(back_populates="module")
+    videos: Mapped[list["Video"]] = relationship(back_populates="module")
 
 
 class Student(Base):
@@ -397,3 +398,6 @@ class PhitronBook(Base):
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1536))
 
     module: Mapped[Module] = relationship(back_populates="phitron_book")
+
+
+from app.models.videos import ChatMessage, TranscriptChunk, Video, VideoSummary

@@ -7,6 +7,7 @@ from app.services.pair_challenge import (
     rematch_unaccepted_challenges,
 )
 from app.services.streak import check_streaks
+from app.services.video_pipeline import process_video
 from app.tasks.celery_app import celery_app
 
 
@@ -50,3 +51,13 @@ def run_league_soft_reset() -> int:
             return await soft_reset_leagues(session)
 
     return _run_async(_inner())
+
+
+@celery_app.task(name="app.tasks.background.process_video_task")
+def process_video_task(url_or_id: str, module_id: str | None = None) -> dict:
+    parsed_module_id = None
+    if module_id:
+        import uuid
+
+        parsed_module_id = uuid.UUID(module_id)
+    return process_video(url_or_id, module_id=parsed_module_id)

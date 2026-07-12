@@ -17,6 +17,7 @@ This document defines the PostgreSQL database schema and business logic requirem
 ### `students`
 The central user table.
 - `id`: UUID (Primary Key)
+- `supabase_user_id`: UUID (Unique, Nullable) - *Links to Supabase Auth user*
 - `name`: VARCHAR(255)
 - `email`: VARCHAR(255) (Unique, Indexed)
 - `phone_number`: VARCHAR(20)
@@ -101,13 +102,16 @@ Junction table tracking student performance on specific exams.
   - `recommended_content_link`: VARCHAR(255)
   - `is_completed`: BOOLEAN
 
-### HeatMap & Consistency Tracker
+### HeatMap & Consistency Tracker (GitHub-style)
 - `daily_activity_logs`
   - `id`: UUID (Primary Key)
   - `student_id`: UUID (Foreign Key)
   - `date`: DATE
-  - `watch_time_minutes`: INT
-  - `heatmap_percentage`: FLOAT
+  - `modules_watched`: INT (Default: 0)
+  - `quizzes_passed`: INT (Default: 0)
+  - `assignments_submitted`: INT (Default: 0)
+  - `revision_minutes`: INT (Default: 0)
+  - `contribution_score`: INT (Default: 0) - *Drives heatmap color intensity*
   - `is_streak_maintained`: BOOLEAN
   - `used_freeze_point`: BOOLEAN
 
@@ -163,6 +167,42 @@ Junction table tracking student performance on specific exams.
 - `module_summary`: TEXT
 - `embedding`: VECTOR(1536) - *Index using HNSW or IVFFlat for fast similarity search.*
 
+### Video Chat RAG (768-dim embeddings)
+- `videos`
+  - `id`: UUID (Primary Key)
+  - `source_id`: VARCHAR(64) (Unique) - *YouTube ID or external source key*
+  - `source_type`: VARCHAR(32) (Default: youtube)
+  - `title`: TEXT
+  - `transcript_status`: VARCHAR(32) - *pending | processing | ready | failed*
+  - `module_id`: UUID (Foreign Key -> `modules.id`, Nullable)
+  - `created_at`: TIMESTAMP
+  - `updated_at`: TIMESTAMP
+- `transcript_chunks`
+  - `id`: UUID (Primary Key)
+  - `video_id`: UUID (Foreign Key -> `videos.id`)
+  - `chunk_text`: TEXT
+  - `start_time`: FLOAT
+  - `end_time`: FLOAT
+  - `chunk_index`: INT
+  - `embedding`: VECTOR(768)
+  - `created_at`: TIMESTAMP
+- `video_summaries`
+  - `id`: UUID (Primary Key)
+  - `video_id`: UUID (Foreign Key -> `videos.id`, Unique)
+  - `overview`: TEXT
+  - `key_concepts`: JSONB
+  - `suggested_questions`: JSONB
+  - `created_at`: TIMESTAMP
+  - `updated_at`: TIMESTAMP
+- `chat_messages`
+  - `id`: UUID (Primary Key)
+  - `student_id`: UUID (Nullable) - *Session or authenticated student ID*
+  - `video_id`: UUID (Foreign Key -> `videos.id`)
+  - `role`: VARCHAR(16) - *user | assistant*
+  - `content`: TEXT
+  - `cited_timestamp`: FLOAT (Nullable)
+  - `created_at`: TIMESTAMP
+
 ---
 
 ## 6. Cursor Implementation Directives (Libraries & Logic)
@@ -176,10 +216,8 @@ Junction table tracking student performance on specific exams.
 
 **Business Logic Requirements:**
 1. **Streak Logic (10 PM Cron):** If module not completed in 24h, `is_streak_maintained = False` unless `streak_freeze_points > 0`. Deduct 1 freeze point to grant a 48h extension.
-2. **HeatMap Logic:**
-   - Sat/Sun/Tue: `watch_time == module duration` AND `module quiz_score >= 9`.
-   - Mon/Wed: `watch_time == conceptual_session duration`.
-   - Thu: `watch_time == exam duration + 60 mins`.
-   - Fri: `watch_time >= 60 mins`.
+2. **HeatMap Logic (GitHub-style contribution score):**
+   - `contribution_score` is derived from `modules_watched`, `quizzes_passed`, `assignments_submitted`, and `revision_minutes`.
+   - Color mapping: cry (0), yellow (1-2), light_green (3-5), dark_green (6+).
 3. **AI Pair Challenge (10 AM Match):** Match active students within `±20%` module distance. Re-match inactive acceptors by 12 PM. Deduct pair points on 3 consecutive misses.
 4. **League Reset:** After 4-week season, shift `current_league` down 2 tiers (floor is IRON).

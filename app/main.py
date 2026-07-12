@@ -1,13 +1,18 @@
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
 from app.routers.auth import router as auth_router
+from app.routers.videos import router as videos_router
 
 settings = get_settings()
+static_dir = Path(__file__).resolve().parent.parent / "static"
 
 app = FastAPI(
     title="Phitron EdTech API",
@@ -24,6 +29,19 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(videos_router)
+
+
+@app.get("/")
+async def serve_index():
+    index_path = static_dir / "index.html"
+    if not index_path.exists():
+        return {"message": "Phitron EdTech API", "docs": "/docs"}
+    return FileResponse(index_path)
+
+
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 @app.get("/health")
