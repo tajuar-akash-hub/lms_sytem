@@ -1,9 +1,9 @@
-"""One-time data migration: old Neon DB -> new Neon DB.
+"""One-time data migration: source Neon DB -> destination Neon DB.
 
-Reads all rows from the 4 app tables on the OLD DB (from .env's DATABASE_URL)
-and inserts them into the NEW DB (from .env's NEW_DATABASE_URL).
+Reads all rows from the 4 app tables on the SOURCE DB (from .env's OLD_DATABASE_URL)
+and inserts them into the DESTINATION DB (from .env's DATABASE_URL).
 
-PREREQUISITES (run once on the new DB before this script):
+PREREQUISITES (run once on the destination DB before this script):
     alembic upgrade head
 
 This creates the videos, transcript_chunks, video_summaries, and
@@ -14,6 +14,11 @@ Run with:
     OLD_DATABASE_URL=... DATABASE_URL=... python migrate_db.py
 
 Or just set both in .env and run: python migrate_db.py
+
+NOTE: This script is now mostly historical. The default .env points at the
+new Neon DB (ep-spring-shape) and OLD_DATABASE_URL is unset. To re-run a
+migration you must explicitly set OLD_DATABASE_URL in .env or on the
+command line.
 """
 from __future__ import annotations
 
@@ -31,12 +36,13 @@ OLD_URL = os.getenv("OLD_DATABASE_URL")
 NEW_URL = os.getenv("DATABASE_URL")
 
 if not OLD_URL or not NEW_URL:
-    print("Set both OLD_DATABASE_URL and NEW_DATABASE_URL in .env")
-    print("OLD_DATABASE_URL is the current database; NEW_DATABASE_URL is where to copy to.")
+    print("Set both OLD_DATABASE_URL and DATABASE_URL in .env")
+    print("DATABASE_URL is the destination (where to copy to).")
+    print("OLD_DATABASE_URL is the source (where to copy from).")
     sys.exit(1)
 
 if OLD_URL == NEW_URL:
-    print("OLD and NEW URLs are identical — nothing to do.")
+    print("OLD and NEW URLs are identical - nothing to do.")
     sys.exit(1)
 
 TABLES = ["videos", "transcript_chunks", "video_summaries", "chat_messages"]
@@ -78,7 +84,7 @@ def copy_table(table: str) -> int:
         cols = [c[0] for c in col_types]
         cols_sql = ", ".join(cols)
         jsonb_cols = {c[0] for c in col_types if c[1] == "jsonb"}
-        src_cur.execute(f'SELECT {cols_sql} FROM {table};')
+        src_cur.execute(f"SELECT {cols_sql} FROM {table};")
         rows = src_cur.fetchall()
         print(f"  source: {len(rows)} rows")
 
@@ -123,8 +129,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    print(f"OLD: {OLD_URL.split('@')[-1]}")
-    print(f"NEW: {NEW_URL.split('@')[-1]}")
+    print(f"SOURCE: {OLD_URL.split('@')[-1]}")
+    print(f"DEST:   {NEW_URL.split('@')[-1]}")
     print()
     main()
     print("\nDone.")

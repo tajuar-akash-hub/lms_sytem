@@ -1,9 +1,10 @@
-"""Copy video RAG data from the old Neon DB into the current one.
+"""Copy video RAG data from a source Neon DB into the current one.
 
 Usage:
   OLD_DATABASE_URL=... python scripts/migrate_videos.py
 
-If OLD_DATABASE_URL is unset, uses the teammate's legacy Neon host.
+OLD_DATABASE_URL must be set explicitly. If unset, the script aborts.
+The legacy `ep-steep-glitter` host is no longer used.
 """
 from __future__ import annotations
 
@@ -19,11 +20,12 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
-OLD_URL = os.getenv(
-    "OLD_DATABASE_URL",
-    "postgresql://neondb_owner:npg_rqxdQyKVLI53@ep-steep-glitter-atg5juhm.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require",
-)
+OLD_URL = os.getenv("OLD_DATABASE_URL")
 NEW_URL = os.getenv("DATABASE_URL_UNPOOLED") or os.getenv("DATABASE_URL")
+
+if not OLD_URL:
+    print("Set OLD_DATABASE_URL in .env to the source Neon DB you want to migrate from.")
+    sys.exit(1)
 
 TABLES = ("videos", "transcript_chunks", "video_summaries", "chat_messages")
 
